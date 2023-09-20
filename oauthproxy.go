@@ -189,6 +189,15 @@ func NewWebSocketOrRestReverseProxy(u *url.URL, opts *Options, auth hmacauth.Hma
 	return &UpstreamProxy{u.Host, proxy, wsProxy, auth}
 }
 
+type PrintRequestHandler struct {
+	handler http.Handler
+}
+
+func (h PrintRequestHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	log.Printf("Request (sending to upstream): %s", req.URL)
+	h.handler.ServeHTTP(w, req)
+}
+
 func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 	serveMux := http.NewServeMux()
 	var auth hmacauth.HmacAuth
@@ -202,6 +211,8 @@ func NewOAuthProxy(opts *Options, validator func(string) bool) *OAuthProxy {
 		case "http", "https":
 			log.Printf("mapping path %q => upstream %q", path, u)
 			proxy := NewWebSocketOrRestReverseProxy(u, opts, auth)
+			proxy = PrintRequestHandler{proxy}
+
 			serveMux.Handle(path, proxy)
 
 		case "file":
@@ -559,6 +570,7 @@ func getRemoteAddr(req *http.Request) (s string) {
 }
 
 func (p *OAuthProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	log.Printf("Request: %s", req.URL)
 	switch path := req.URL.Path; {
 	case path == p.RobotsPath:
 		p.RobotsTxt(rw)
